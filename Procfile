@@ -1,1 +1,1 @@
-web: gunicorn classifier:app --preload
+web: gunicorn classifier:app --timeout 90
