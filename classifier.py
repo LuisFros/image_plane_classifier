@@ -18,17 +18,42 @@ import tensorflow as tf
 import cv2
 import numpy as np
 
-def get_model():
-    new_model = load_model('static/model')
-    # Check its architecture
-    new_model.summary()
-    return new_model
+img_height = 192
+img_width = 192
 
+def get_data_augmentation():
+  data_augmentation = tf.keras.Sequential([
+    tf.keras.layers.experimental.preprocessing.RandomZoom((0.2,0.3)),
+    tf.keras.layers.experimental.preprocessing.RandomContrast(0.1),
+  ])
+  return data_augmentation
+
+def create_model():
+
+    IMG_SHAPE = (img_height,img_width) + (3,)
+    base_model = tf.keras.applications.MobileNetV2(input_shape=IMG_SHAPE,
+                                               include_top=False,
+                                               weights='imagenet')
+    global_average_layer = tf.keras.layers.GlobalAveragePooling2D()
+    base_model.trainable = False
+    prediction_layer = tf.keras.layers.Dense(17,activation='sigmoid')
+    preprocess_input = tf.keras.applications.mobilenet_v2.preprocess_input
+
+    inputs = tf.keras.Input(shape=(img_height, img_width, 3))
+    x = get_data_augmentation()(inputs)
+    x = preprocess_input(x)
+    x = base_model(x, training=False)
+    x = global_average_layer(x)
+    x = tf.keras.layers.Dropout(0.2)(x)
+    outputs = prediction_layer(x)
+    model = tf.keras.Model(inputs, outputs)
+    return model
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'you-will-never-guess'
 bootstrap = Bootstrap(app)
-model = get_model()
+model = create_model()
+model.load_weights("static/weights/weights")
 CLASS_LABELS = ['mammo - mlo',
  'mammo - mag cc',
  'mammo - mag xcc',
@@ -45,7 +70,9 @@ CLASS_LABELS = ['mammo - mlo',
  'decubitus',
  'sagittal',
  'ap',
+
  '3d reconstruction']
+
 class UploadForm(FlaskForm):
     upload = FileField('Select an image:', validators=[
         FileRequired(),
